@@ -106,18 +106,23 @@ def ler_arquivo1(file_buffer):
     return meta_extraida, itens
 
 def conectar_google():
-    caminho_json = "credentials.json"
-    if not os.path.exists(caminho_json):
-        st.error("Arquivo 'credentials.json' não encontrado na pasta do projeto!")
-        st.stop()
-    creds = Credentials.from_service_account_file(caminho_json, scopes=SCOPES)
+    # Verifica se os segredos estão configurados no Streamlit Cloud
+    if "gcp_service_account" in st.secrets:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    else:
+        # Fallback para ambiente local (busca o arquivo físico)
+        caminho_json = "credentials.json"
+        if not os.path.exists(caminho_json):
+            st.error("Arquivo 'credentials.json' não encontrado na pasta do projeto e st.secrets não configurado!")
+            st.stop()
+        creds = Credentials.from_service_account_file(caminho_json, scopes=SCOPES)
         
     gc = gspread.authorize(creds)
     drive_service = build("drive", "v3", credentials=creds)
     return gc, drive_service
 
 def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens):
-    # Nome atualizado para conter "Mapa", o Cliente, a Campanha e o Mês
     nome_arquivo = f"Mapa - {meta['cliente']} - {meta['campanha']} - {meta['mes']}"
     
     # 1. Faz a cópia direta do template no Drive Compartilhado
@@ -179,7 +184,7 @@ def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens)
     if not col_desc_letra:
         col_desc_letra = numero_para_letra(col_entrega_idx + 2)
             
-    # Os dados do plano de mídia começam na linha 11 (deixando a linha 10 do template totalmente intacta com suas fórmulas)
+    # Os dados do plano de mídia começam na linha 11
     linha_inicial = 11
 
     # 4. Preenche Cabeçalho do Mapa
@@ -189,7 +194,7 @@ def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens)
     ws_mapa.update("R3", [[meta["campanha"]]])
     ws_mapa.update("R5", [[meta["data_veiculacao"]]])
 
-    # 5. Localiza exatamente onde está a linha "TOTAL" na coluna B ou C para preservar o rodapé e gerenciar o miolo
+    # 5. Localiza exatamente onde está a linha "TOTAL" na coluna B ou C
     coluna_b_valores = ws_mapa.col_values(2)
     coluna_c_valores = ws_mapa.col_values(3)
     linha_total_template = None
@@ -210,7 +215,7 @@ def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens)
     qtd_linhas_template = linha_fim_dados_template - linha_inicial + 1
     sheet_id = ws_mapa.id
 
-    # 6. Ajusta o miolo da tabela (remove apenas as linhas vazias excedentes antes do total, ou insere se faltar)
+    # 6. Ajusta o miolo da tabela
     if qtd_itens_novos != qtd_linhas_template:
         diff = qtd_itens_novos - qtd_linhas_template
         if diff > 0:
@@ -243,7 +248,7 @@ def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens)
             }
             sh.batch_update(body_delete)
 
-    # 7. Preenche os itens e seções a partir da linha 11, sem tocar na linha 10 e preservando as fórmulas nativas
+    # 7. Preenche os itens e seções
     linha_atual = linha_inicial
     batch_updates = []
     linhas_secao = []
@@ -264,7 +269,7 @@ def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens)
 
     ws_mapa.batch_update(batch_updates, value_input_option="USER_ENTERED")
 
-    # 8. Formatação das linhas de seção: remove dropdown e aplica o estilo visual (fundo azul escuro e texto branco)
+    # 8. Formatação das linhas de seção
     if linhas_secao:
         sheet_id = ws_mapa.id
         requests_secao = []
