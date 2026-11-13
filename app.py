@@ -18,6 +18,29 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
+# --- AUTENTICAÇÃO HÍBRIDA (Local + Nuvem) ---
+creds_dict = None
+
+try:
+    if "gcp_service_account" in st.secrets:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+except Exception:
+    pass
+
+# Se não achou nos segredos do Streamlit (rodando local), busca o arquivo credentials.json
+if not creds_dict and os.path.exists("credentials.json"):
+    with open("credentials.json", "r", encoding="utf-8") as f:
+        creds_dict = json.load(f)
+
+if not creds_dict:
+    st.error("⚠️ Nenhuma credencial encontrada! Coloque o arquivo 'credentials.json' na pasta do projeto ou configure os Secrets no Streamlit Cloud.")
+    st.stop()
+
+# Gera as credenciais oficiais para o gspread
+creds = Credentials.from_service_account_info(
+    creds_dict,
+    scopes=SCOPES
+)
 
 # Mapeamento De -> Para (Arquivo 1 -> Aba Aux do Template)
 DE_PARA_FORMATOS = {
@@ -106,18 +129,7 @@ def ler_arquivo1(file_buffer):
     return meta_extraida, itens
 
 def conectar_google():
-    # Verifica se os segredos estão configurados no Streamlit Cloud
-    if "gcp_service_account" in st.secrets:
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    else:
-        # Fallback para ambiente local (busca o arquivo físico)
-        caminho_json = "credentials.json"
-        if not os.path.exists(caminho_json):
-            st.error("Arquivo 'credentials.json' não encontrado na pasta do projeto e st.secrets não configurado!")
-            st.stop()
-        creds = Credentials.from_service_account_file(caminho_json, scopes=SCOPES)
-        
+    # Usa a credencial global que já foi tratada no topo do código (local ou nuvem)
     gc = gspread.authorize(creds)
     drive_service = build("drive", "v3", credentials=creds)
     return gc, drive_service
@@ -191,8 +203,10 @@ def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens)
     ws_mapa.update("H3", [[meta["cliente"]]])
     ws_mapa.update("H4", [[meta["executivo"]]])
     ws_mapa.update("H5", [[meta["agencia"]]])
-    ws_mapa.update("R3", [[meta["campanha"]]])
-    ws_mapa.update("R5", [[meta["data_veiculacao"]]])
+    # 4.1 Ajustando o PI e a Campanha para as células corretas
+    ws_mapa.update("O3", [[meta["pi"]]])          # O PI vai na linha do rótulo PI: (coluna O)
+    ws_mapa.update("Y3", [[meta["campanha"]]])   # A Campanha vai na linha do rótulo CAMPANHA: (ajuste a coluna se necessário, ex: W3 ou V3)
+    ws_mapa.update("S5", [[meta["data_veiculacao"]]])
 
     # 5. Localiza exatamente onde está a linha "TOTAL" na coluna B ou C
     coluna_b_valores = ws_mapa.col_values(2)
@@ -339,7 +353,8 @@ if arquivo1:
         agencia = col2.text_input("Agência", value=meta_extraida["agencia"])
         executivo = col1.text_input("Executivo", value=meta_extraida["executivo"])
         mes = col2.text_input("Mês de Veiculação", value=meta_extraida["mes"])
-        campanha = st.text_input("Campanha / PI", value=meta_extraida["campanha"])
+        campanha = st.text_input("Campanha", value=meta_extraida["campanha"])
+        pi = col2.text_input("PI (Número do Contrato)", value="") # Começa em branco para preenchimento manual
         data_veiculacao = st.text_input("Período de Veiculação", value=meta_extraida["data_veiculacao"])
 
         gerar_btn = st.form_submit_button("🚀 Gerar Planilha no Google Sheets")
@@ -353,12 +368,13 @@ if arquivo1:
                 pasta_id = ""
 
                 meta = {
-                    "cliente": cliente,
-                    "agencia": agencia,
-                    "executivo": executivo,
-                    "mes": mes,
-                    "campanha": campanha,
-                    "data_veiculacao": data_veiculacao,
+                "cliente": cliente,
+                "agencia": agencia,
+                "executivo": executivo,
+                "mes": mes,
+                "campanha": campanha,
+                "pi": pi, # <--- Garante que o PI manual vai para o dicionário
+                "data_veiculacao": data_veiculacao,
                 }
                 
                 url_planilha = gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens)
