@@ -10,7 +10,7 @@ import os
 # --- CONFIGURAÇÕES DA PÁGINA ---
 st.set_page_config(
     page_title="Gerador de Mapa de Entrega - Sua Música",
-    page_icon="📊",
+    page_icon="📊​",
     layout="centered"
 )
 
@@ -135,7 +135,7 @@ def conectar_google():
     return gc, drive_service
 
 def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens):
-    nome_arquivo = f"Mapa - {meta['cliente']} - {meta['campanha']} - {meta['mes']}"
+    nome_arquivo = f"{meta['cliente']}_Mapa_{meta['campanha']}_{meta['mes']}"
     
     # 1. Faz a cópia direta do template no Drive Compartilhado
     body = {
