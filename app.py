@@ -317,7 +317,14 @@ def gerar_planilha_sheets(gc, drive_service, template_id, pasta_id, meta, itens)
     return f"https://docs.google.com/spreadsheets/d/{nova_planilha_id}/edit"
 
 # --- INTERFACE DA APLICAÇÃO ---
-st.title("📊 Gerador de Mapa de Entrega")
+col_logo, col_titulo = st.columns([0.15, 0.85], vertical_alignment="center")
+
+with col_logo:
+    st.image("https://assets.suamusica.com.br/img/logo-140x49.png", width=70) 
+
+with col_titulo:
+    st.markdown("<h2 style='margin: 0;'>Gere seu mapa aqui!</h2>", unsafe_allow_html=True)
+
 st.markdown("Faça o upload do **Plano de Mídia (.xlsx)** para gerar o Google Sheets preenchido automaticamente.")
 
 arquivo1 = st.file_uploader("Enviar Plano de Mídia", type=["xlsx"])
